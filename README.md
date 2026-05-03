@@ -5,7 +5,7 @@ Replication of microarray analysis from: "Bioinformatics analysis characterizes 
 This project validates four signature genes (**ALAS2, HBD, EPB42, FECH**) as potential peripheral blood biomarkers for cardiac allograft rejection (AR) diagnosis using the GSE5967 validation dataset.
 
 ## Pipeline
-
+```
 CEL files (.cel.gz)
       ↓
 read.affybatch()        # Load raw microarray data
