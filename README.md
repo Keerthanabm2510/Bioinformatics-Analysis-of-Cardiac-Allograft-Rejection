@@ -1,8 +1,8 @@
 # Bioinformatics-Analysis-of-Cardiac-Allograft-Rejection
 
-Replication of microarray analysis from: "Bioinformatics analysis characterizes immune infiltration landscape and identifies potential blood biomarkers for heart transplantation" Wang &amp; Peng, Transplant Immunology 84 (2024) 102036
+This repository documents my attempt to reproduce the bioinformatics analysis from the paper “Bioinformatics analysis characterizes immune infiltration landscape and identifies potential blood biomarkers for heart transplantation.”
 
-This project validates four signature genes (**ALAS2, HBD, EPB42, FECH**) as potential peripheral blood biomarkers for cardiac allograft rejection (AR) diagnosis using the GSE5967 validation dataset.
+The project includes processing of GEO datasets (GSE87301, GSE33970, GSE5967), differential gene expression analysis, functional enrichment (GO/KEGG), machine learning approaches (LASSO and Random Forest), immune cell infiltration analysis (ssGSEA), and validation of key biomarkers.
 
 ## Pipeline
 ```
@@ -54,10 +54,7 @@ sudo apt-get install -y \
 | `signature_genes_GSE5967.txt` | Results for 4 signature genes |
 
 ## Reference
-Wang Y, Peng X. Bioinformatics analysis characterizes immune infiltration
-landscape and identifies potential blood biomarkers for heart transplantation.
-*Transplant Immunology*. 2024;84:102036.
-doi: 10.1016/j.trim.2024.102036
+Wang, Y., & Peng, X. (2024). Bioinformatics analysis characterizes immune infiltration landscape and identifies potential blood biomarkers for heart transplantation. Transplant Immunology, 84, 102036.
 
 ## Author
 Keerthana
