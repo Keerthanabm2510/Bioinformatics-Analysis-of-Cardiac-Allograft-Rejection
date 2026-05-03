@@ -278,6 +278,148 @@ cat("\nAll results saved to:", output_path, "\n")
 cat("\nAnalysis complete!\n")
 
 # =============================================================================
-# SESSION INFO
+# SECTION 10: Volcano Plot
 # =============================================================================
-sessionInfo()
+
+library(ggplot2)
+
+# Add significance labels
+DEG_results$significance <- "Not Significant"
+DEG_results$significance[DEG_results$P.Value < 0.05 &
+                         DEG_results$logFC > 1]  <- "Up"
+DEG_results$significance[DEG_results$P.Value < 0.05 &
+                         DEG_results$logFC < -1] <- "Down"
+
+# Check counts
+cat("\n--- Significance Summary ---\n")
+print(table(DEG_results$significance))
+
+# Add labels for signature genes only
+DEG_results$label <- ""
+DEG_results$label[rownames(DEG_results) %in%
+                  signature_genes] <- rownames(DEG_results)[
+                  rownames(DEG_results) %in% signature_genes]
+
+# Create volcano plot
+p_volcano <- ggplot(DEG_results,
+                    aes(x = logFC,
+                        y = -log10(P.Value),
+                        color = significance)) +
+    geom_point(alpha = 0.6, size = 1.5) +
+    scale_color_manual(values = c("Up"   = "red",
+                                  "Down" = "blue",
+                                  "Not Significant" = "grey")) +
+    geom_vline(xintercept = c(-1, 1),
+               linetype = "dashed",
+               color = "black") +
+    geom_hline(yintercept = -log10(0.05),
+               linetype = "dashed",
+               color = "black") +
+    geom_text(aes(label = label),
+              size = 3,
+              vjust = -0.5,
+              color = "black") +
+    labs(title = "Volcano Plot - GSE5967",
+         x = "log2 Fold Change",
+         y = "-log10(P.Value)") +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
+
+print(p_volcano)
+
+# Save volcano plot
+ggsave(file.path(output_path, "volcano_plot_GSE5967.png"),
+       p_volcano,
+       width = 8,
+       height = 6,
+       dpi = 300)
+
+cat("Volcano plot saved!\n")
+
+
+# =============================================================================
+# SECTION 11: Heatmap of Top 50 DEGs
+# =============================================================================
+
+library(pheatmap)
+
+# Get top 46 by p-value + 4 signature genes = 50 total
+top46_genes    <- rownames(head(DEG_results, 46))
+combined_genes <- unique(c(top46_genes, signature_genes))
+
+# Extract expression data
+heatmap_data <- exprs_final[combined_genes, ]
+cat("\nHeatmap data dimensions:", dim(heatmap_data), "\n")
+
+# Column annotation (AR vs NAR)
+annotation_col <- data.frame(
+    Group = group,
+    row.names = colnames(exprs_final)
+)
+
+# Row annotation (highlight signature genes)
+annotation_row <- data.frame(
+    Type = ifelse(rownames(heatmap_data) %in% signature_genes,
+                  "Signature", "DEG"),
+    row.names = rownames(heatmap_data)
+)
+
+# Plot heatmap
+p_heatmap <- pheatmap(heatmap_data,
+         main = "Top 50 DEGs - GSE5967",
+         annotation_col = annotation_col,
+         annotation_row = annotation_row,
+         annotation_colors = list(
+             Group = c(AR = "red", NAR = "blue"),
+             Type  = c(Signature = "orange", DEG = "grey")),
+         scale = "row",
+         show_rownames = TRUE,
+         show_colnames = FALSE,
+         fontsize_row = 7,
+         color = colorRampPalette(
+             c("blue", "white", "red"))(100),
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete")
+
+# Save heatmap
+png(file.path(output_path, "heatmap_top50_GSE5967.png"),
+    width = 900,
+    height = 1100)
+
+pheatmap(heatmap_data,
+         main = "Top 50 DEGs - GSE5967",
+         annotation_col = annotation_col,
+         annotation_row = annotation_row,
+         annotation_colors = list(
+             Group = c(AR = "red", NAR = "blue"),
+             Type  = c(Signature = "orange", DEG = "grey")),
+         scale = "row",
+         show_rownames = TRUE,
+         show_colnames = FALSE,
+         fontsize_row = 7,
+         color = colorRampPalette(
+             c("blue", "white", "red"))(100),
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete")
+
+dev.off()
+cat("Heatmap saved!\n")
+
+
+# =============================================================================
+# FINAL SUMMARY
+# =============================================================================
+
+cat("\n", rep("=", 50), "\n", sep = "")
+cat("GSE5967 ANALYSIS COMPLETE\n")
+cat(rep("=", 50), "\n", sep = "")
+cat("Results saved to:", output_path, "\n\n")
+cat("Files generated:\n")
+cat("  - DEG_results_GSE5967.txt\n")
+cat("  - DEGs_filtered_GSE5967.txt\n")
+cat("  - signature_genes_GSE5967.txt\n")
+cat("  - volcano_plot_GSE5967.png\n")
+cat("  - heatmap_top50_GSE5967.png\n")
+
