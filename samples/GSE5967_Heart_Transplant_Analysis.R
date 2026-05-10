@@ -251,7 +251,7 @@ for (gene in signature_genes) {
 # SECTION 9: Save Results
 # =============================================================================
 
-output_path <- "/home/keerthana/Documents/project/1_project"
+output_path <- "/home/keerthana/Documents/project/1_project/sample/sample_1"
 
 # Save all DEG results
 write.table(DEG_results,
