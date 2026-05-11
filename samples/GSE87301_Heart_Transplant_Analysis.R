@@ -58,6 +58,19 @@ cat("Expression matrix dimensions:", dim(exprs_matrix), "\n")
 samples <- basename(sampleNames(eset))
 
 # Assign group based on GSM number in filename
+AR_gsm <- c("GSM2327587", "GSM2327591", "GSM2327594",
+             "GSM2327596", "GSM2327600", "GSM2327602",
+             "GSM2327605", "GSM2327608", "GSM2327609",
+             "GSM2327611")
+
+NAR_gsm <- c("GSM2327586", "GSM2327588", "GSM2327589",
+              "GSM2327590", "GSM2327592", "GSM2327593",
+              "GSM2327595", "GSM2327597", "GSM2327598",
+              "GSM2327599", "GSM2327601", "GSM2327603",
+              "GSM2327604", "GSM2327606", "GSM2327607",
+              "GSM2327610")
+
+# Assign group based on GSM number in filename
 group <- ifelse(grepl(paste(AR_gsm, collapse="|"),
                        samples), "AR", "NAR")
 
