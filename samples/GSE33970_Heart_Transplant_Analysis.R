@@ -1,1 +1,226 @@
+# =============================================================================
+# SECTION 1: Load Required Libraries
+# =============================================================================
 
+library(affy)           # Reading CEL files
+library(gcrma)          # GCRMA normalization
+library(hgu133acdf)     # Array CDF annotation
+library(hgu133a.db)     # Probe to gene mapping
+library(AnnotationDbi)  # Annotation tools
+library(limma)          # Differential expression
+library(pheatmap)       # Heatmap visualization
+
+# =============================================================================
+# SECTION 2: Load CEL Files
+# =============================================================================
+
+# AR samples - WB_AR only (7 samples)
+AR_gsm <- c("GSM839781",
+                   "GSM839782",
+                   "GSM839783",
+                   "GSM839784",
+                   "GSM839785",
+                   "GSM839786",
+                   "GSM839787")
+
+# NAR samples - WB_non-AR only (11 samples)
+NAR_gsm <- c("GSM839788",
+                    "GSM839789",
+                    "GSM839790",
+                    "GSM839791",
+                    "GSM839792",
+                    "GSM839793",
+                    "GSM839794",
+                    "GSM839795",
+                    "GSM839796",
+                    "GSM839797",
+                    "GSM839798")
+
+# Verify counts
+cat("AR samples:", length(AR_gsm), "\n")   # should be 7
+cat("NAR samples:", length(NAR_gsm), "\n") # should be 11
+
+# Set path to CEL files
+cel_path <- "/home/keerthana/Documents/project/1_project/sample/sample_3"
+
+# List all CEL.gz files
+celfiles_all <- list.files(
+    path = "/home/keerthana/Documents/project/1_project/sample/sample_3",
+    pattern = "\\.[Cc][Ee][Ll]\\.gz$",
+    full.names = TRUE)
+
+cat("Total files found:", length(celfiles_all), "\n") # 36
+
+# Keep only WB samples (AR + NAR)
+all_gsm <- c(AR_gsm, NAR_gsm)
+
+celfiles <- celfiles_all[grepl(
+    paste(all_gsm, collapse="|"),
+    celfiles_all)]
+
+cat("WB files selected:", length(celfiles), "\n") # should be 18
+
+cat("Number of CEL files found:", length(celfiles), "\n")
+print(basename(celfiles))
+
+# Read CEL files into AffyBatch object
+raw_data <- read.affybatch(filenames = celfiles)
+cat("Raw data loaded successfully\n")
+cat("Number of samples:", ncol(raw_data), "\n")
+
+# =============================================================================
+# SECTION 3: GCRMA Normalization
+# =============================================================================
+
+# Run GCRMA normalization
+cat("Running GCRMA normalization...\n")
+eset <- gcrma(raw_data)
+
+# Extract expression matrix
+exprs_matrix <- exprs(eset)
+cat("Normalization complete\n")
+cat("Expression matrix dimensions:", dim(exprs_matrix), "\n")
+
+# =============================================================================
+# SECTION 4: Assign Group Labels (AR vs NAR)
+# =============================================================================
+
+# Get sample names from eset
+samples <- basename(sampleNames(eset))
+
+# Assign group based on GSM number in filename
+group <- ifelse(grepl(paste(AR_gsm, collapse="|"),
+                       samples), "AR", "NAR")
+
+# Convert to factor
+group <- factor(group,
+                levels = c("NAR", "AR"))
+
+# Assign to eset
+pData(eset)$group <- group
+
+# Verify
+cat("\nGroup assignments:\n")
+print(pData(eset))
+
+# Verify counts
+cat("\nAR samples:", sum(group == "AR"), "\n")    # should be 10
+cat("NAR samples:", sum(group == "NAR"), "\n")    # should be 16
+
+# =============================================================================
+# SECTION 5: Quality Control
+# =============================================================================
+
+# --- 5.1: Boxplot before and after normalization ---
+par(mfrow = c(1, 2))
+
+boxplot(raw_data,
+        main = "Before Normalization",
+        col = "lightblue",
+        las = 2,
+        cex.axis = 0.5)
+
+boxplot(exprs_matrix,
+        main = "After Normalization",
+        col = "lightgreen",
+        las = 2,
+        cex.axis = 0.5)
+
+par(mfrow = c(1, 1))
+
+# --- 5.2: PCA Plot ---
+pca <- prcomp(t(exprs_matrix))
+
+# Calculate variance explained
+var_explained <- summary(pca)$importance[2, 1:2] * 100
+
+plot(pca$x[, 1], pca$x[, 2],
+     col = c(rep("red", 7), rep("blue", 7)),
+     pch = 19,
+     main = "PCA Plot - GSE87301",
+     xlab = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+     ylab = paste0("PC2 (", round(var_explained[2], 1), "%)"))
+
+legend("topright",
+       legend = c("AR", "NAR"),
+       col = c("red", "blue"),
+       pch = 19)
+
+# --- 5.3: Sample Correlation Heatmap ---
+cor_matrix <- cor(exprs_matrix)
+
+annotation_col <- data.frame(group = group,
+                             row.names = sampleNames(eset))
+
+pheatmap(cor_matrix,
+         main = "Sample Correlation Heatmap",
+         annotation_col = annotation_col,
+         annotation_colors = list(group = c(AR = "red", NAR = "blue")),
+         show_rownames = FALSE)
+
+# =============================================================================
+# SECTION 6: Probe to Gene Symbol Mapping
+# =============================================================================
+
+# GPL570 uses hgu133plus2.db (NOT hgu133a.db)
+library(hgu133plus2.db)
+
+probe_ids <- rownames(exprs_matrix)
+
+gene_symbols <- mapIds(hgu133plus2.db,    # ← different from GSE5967
+                       keys = probe_ids,
+                       column = "SYMBOL",
+                       keytype = "PROBEID",
+                       multiVals = "first")
+# Remove NA
+keep <- !is.na(gene_symbols)
+exprs_clean <- exprs_matrix[keep, ]
+genes_clean <- gene_symbols[keep]
+
+# Keep highest expressed probe per gene
+mean_expr <- rowMeans(exprs_clean)
+ord <- order(mean_expr, decreasing = TRUE)
+exprs_clean <- exprs_clean[ord, ]
+genes_clean <- genes_clean[ord]
+
+unique_idx <- !duplicated(genes_clean)
+exprs_final <- exprs_clean[unique_idx, ]
+rownames(exprs_final) <- genes_clean[unique_idx]
+
+cat("Final dimensions:", dim(exprs_final), "\n")
+cat("Unique genes:", nrow(exprs_final), "\n")
+
+# Verify signature genes are present
+signature_genes <- c("ALAS2", "HBD", "EPB42", "FECH")
+cat("\nVerifying signature genes present:\n")
+for (gene in signature_genes) {
+    found <- grep(paste0("^", gene, "$"),
+                  rownames(exprs_final),
+                  value = TRUE)
+    cat(gene, ":", ifelse(length(found) > 0, "FOUND ✓", "NOT FOUND ✗"), "\n")
+}
+
+# =============================================================================
+# SECTION 7: Differential Expression Analysis (limma)
+# =============================================================================
+
+# Design matrix
+design_matrix <- model.matrix(~group)
+colnames(design_matrix) <- c("Intercept", "AR_vs_NAR")
+
+# Verify dimensions match
+cat("\nexprs_final columns:", ncol(exprs_final), "\n")  # 26
+cat("design_matrix rows:", nrow(design_matrix), "\n")   # 26
+
+# Fit model
+fit  <- lmFit(exprs_final, design_matrix)
+fit2 <- eBayes(fit)
+
+# Get all results
+DEG_results <- topTable(fit2,
+                        coef = "AR_vs_NAR",
+                        number = Inf,
+                        adjust.method = "BH",
+                        sort.by = "P")
+
+cat("Total genes tested:", nrow(DEG_results), "\n")
