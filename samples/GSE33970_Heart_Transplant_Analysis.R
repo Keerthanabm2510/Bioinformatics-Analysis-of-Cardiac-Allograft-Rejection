@@ -137,7 +137,7 @@ var_explained <- summary(pca)$importance[2, 1:2] * 100
 plot(pca$x[, 1], pca$x[, 2],
      col = c(rep("red", 7), rep("blue", 7)),
      pch = 19,
-     main = "PCA Plot - GSE87301",
+     main = "PCA Plot - GSE33970",
      xlab = paste0("PC1 (", round(var_explained[1], 1), "%)"),
      ylab = paste0("PC2 (", round(var_explained[2], 1), "%)"))
 
@@ -342,7 +342,7 @@ p_volcano <- ggplot(DEG_results,
 print(p_volcano)
 
 # Save volcano plot
-ggsave(file.path(output_path, "volcano_plot_GSE5967.png"),
+ggsave(file.path(output_path, "volcano_plot_GSE33970.png"),
        p_volcano,
        width = 8,
        height = 6,
