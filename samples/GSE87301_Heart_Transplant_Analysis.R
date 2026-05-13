@@ -215,7 +215,7 @@ cat("Total genes tested:", nrow(DEG_results), "\n")
 DEGs <- DEG_results[DEG_results$P.Value < 0.05 &
                     abs(DEG_results$logFC) > 1, ]
 
-at("\n--- DEG Summary ---\n")
+cat("\n--- DEG Summary ---\n")
 cat("Total DEGs:", nrow(DEGs), "\n")
 cat("Upregulated:", nrow(DEGs[DEGs$logFC > 0,]), "\n")
 cat("Downregulated:", nrow(DEGs[DEGs$logFC < 0,]), "\n")
