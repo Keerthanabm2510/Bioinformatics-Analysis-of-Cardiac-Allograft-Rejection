@@ -254,21 +254,21 @@ output_path <- "/home/keerthana/Documents/project/1_project/sample/sample_2"
 
 # Save all DEG results
 write.table(DEG_results,
-            file = file.path(output_path, "DEG_results_GSE5967.txt"),
+            file = file.path(output_path, "DEG_results_GSE87301.txt"),
             sep = "\t",
             quote = FALSE,
             row.names = TRUE)
 
 # Save filtered DEGs
 write.table(DEGs_relaxed,
-            file = file.path(output_path, "DEGs_filtered_GSE5967.txt"),
+            file = file.path(output_path, "DEGs_filtered_GSE87301.txt"),
             sep = "\t",
             quote = FALSE,
             row.names = TRUE)
 
 # Save signature gene results
 write.table(sig_results,
-            file = file.path(output_path, "signature_genes_GSE5967.txt"),
+            file = file.path(output_path, "signature_genes_GSE87301.txt"),
             sep = "\t",
             quote = FALSE,
             row.names = TRUE)
@@ -318,7 +318,7 @@ p_volcano <- ggplot(DEG_results,
               size = 3,
               vjust = -0.5,
               color = "black") +
-    labs(title = "Volcano Plot - GSE5967",
+    labs(title = "Volcano Plot - GSE87301",
          x = "log2 Fold Change",
          y = "-log10(P.Value)") +
     theme_bw() +
@@ -327,7 +327,7 @@ p_volcano <- ggplot(DEG_results,
 print(p_volcano)
 
 # Save volcano plot
-ggsave(file.path(output_path, "volcano_plot_GSE5967.png"),
+ggsave(file.path(output_path, "volcano_plot_GSE87301.png"),
        p_volcano,
        width = 8,
        height = 6,
@@ -365,7 +365,7 @@ annotation_row <- data.frame(
 
 # Plot heatmap
 p_heatmap <- pheatmap(heatmap_data,
-         main = "Top 50 DEGs - GSE5967",
+         main = "Top 50 DEGs - GSE87301",
          annotation_col = annotation_col,
          annotation_row = annotation_row,
          annotation_colors = list(
@@ -382,12 +382,12 @@ p_heatmap <- pheatmap(heatmap_data,
          clustering_method = "complete")
 
 # Save heatmap
-png(file.path(output_path, "heatmap_top50_GSE5967.png"),
+png(file.path(output_path, "heatmap_top50_GSE87301.png"),
     width = 900,
     height = 1100)
 
 pheatmap(heatmap_data,
-         main = "Top 50 DEGs - GSE5967",
+         main = "Top 50 DEGs - GSE87301",
          annotation_col = annotation_col,
          annotation_row = annotation_row,
          annotation_colors = list(
@@ -415,8 +415,8 @@ cat("GSE5967 ANALYSIS COMPLETE\n")
 cat(rep("=", 50), "\n", sep = "")
 cat("Results saved to:", output_path, "\n\n")
 cat("Files generated:\n")
-cat("  - DEG_results_GSE5967.txt\n")
-cat("  - DEGs_filtered_GSE5967.txt\n")
-cat("  - signature_genes_GSE5967.txt\n")
-cat("  - volcano_plot_GSE5967.png\n")
-cat("  - heatmap_top50_GSE5967.png\n")
+cat("  - DEG_results_GSE87301.txt\n")
+cat("  - DEGs_filtered_GSE87301.txt\n")
+cat("  - signature_genes_GSE87301.txt\n")
+cat("  - volcano_plot_GSE87301.png\n")
+cat("  - heatmap_top50_GSE87301.png\n")
