@@ -420,3 +420,280 @@ cat("  - DEGs_filtered_GSE87301.txt\n")
 cat("  - signature_genes_GSE87301.txt\n")
 cat("  - volcano_plot_GSE87301.png\n")
 cat("  - heatmap_top50_GSE87301.png\n")
+
+# =============================================================================
+# SECTION 12: Functional Enrichment Analysis (GO + KEGG)
+# =============================================================================
+
+library(clusterProfiler)
+library(enrichplot)
+library(org.Hs.eg.db)
+library(ggplot2)
+
+cat("All packages loaded successfully!\n")
+
+# Set output path
+output_path <- getwd()
+
+# =============================================================================
+# Load DEG results from GSE87301 (training dataset)
+# =============================================================================
+
+DEG_results_87301 <- read.table(
+    "/home/keerthana/Documents/project/1_project/sample/sample_2/DEG_results_GSE87301.txt",
+    header = TRUE,
+    sep = "\t")
+
+# Filter DEGs
+DEGs_87301 <- DEG_results_87301[
+    DEG_results_87301$P.Value < 0.05 &
+    abs(DEG_results_87301$logFC) > 1, ]
+
+cat("DEGs from GSE87301:", nrow(DEGs_87301), "\n")
+
+# =============================================================================
+# Convert Gene Symbols to Entrez IDs
+# =============================================================================
+
+DEG_genes <- rownames(DEGs_87301)
+cat("Total DEG genes:", length(DEG_genes), "\n")
+
+entrez_ids <- mapIds(org.Hs.eg.db,
+                     keys      = DEG_genes,
+                     column    = "ENTREZID",
+                     keytype   = "SYMBOL",
+                     multiVals = "first")
+
+# Remove NAs
+entrez_ids <- entrez_ids[!is.na(entrez_ids)]
+cat("Mapped to Entrez IDs:", length(entrez_ids), "\n")
+
+# =============================================================================
+# GO Enrichment Analysis
+# =============================================================================
+
+cat("\nRunning GO enrichment analysis...\n")
+
+# Biological Process (BP)
+go_BP <- enrichGO(gene          = entrez_ids,
+                  OrgDb         = org.Hs.eg.db,
+                  ont           = "BP",
+                  pAdjustMethod = "BH",
+                  pvalueCutoff  = 0.05,
+                  qvalueCutoff  = 0.2,
+                  readable      = TRUE)
+
+cat("GO BP terms:", nrow(go_BP@result), "\n")
+
+# Cellular Component (CC)
+go_CC <- enrichGO(gene          = entrez_ids,
+                  OrgDb         = org.Hs.eg.db,
+                  ont           = "CC",
+                  pAdjustMethod = "none",
+                  pvalueCutoff  = 0.05,
+                  readable      = TRUE)
+
+cat("GO CC terms:", nrow(go_CC@result), "\n")
+
+# Molecular Function (MF)
+go_MF <- enrichGO(gene          = entrez_ids,
+                  OrgDb         = org.Hs.eg.db,
+                  ont           = "MF",
+                  pAdjustMethod = "BH",
+                  pvalueCutoff  = 0.05,
+                  qvalueCutoff  = 0.2,
+                  readable      = TRUE)
+
+cat("GO MF terms:", nrow(go_MF@result), "\n")
+
+# =============================================================================
+# KEGG Enrichment Analysis
+# =============================================================================
+
+cat("\nRunning KEGG enrichment analysis...\n")
+
+kegg <- enrichKEGG(gene          = entrez_ids,
+                   organism      = "hsa",
+                   pAdjustMethod = "none",
+                   pvalueCutoff  = 0.05)
+
+cat("KEGG pathways:", nrow(kegg@result), "\n")
+
+# =============================================================================
+# Prepare filtered data for plotting
+# =============================================================================
+
+# GO BP - already filtered by enrichGO
+bp_data <- go_BP@result[go_BP@result$pvalue < 0.05, ]
+bp_data <- head(bp_data[order(bp_data$pvalue), ], 10)
+
+# GO CC - filter and prepare
+cc_data <- go_CC@result[go_CC@result$pvalue < 0.05, ]
+cc_data <- head(cc_data[order(cc_data$pvalue), ], 10)
+
+# GO MF - already filtered by enrichGO
+mf_data <- go_MF@result[go_MF@result$pvalue < 0.05, ]
+mf_data <- head(mf_data[order(mf_data$pvalue), ], 10)
+
+# KEGG - filter and prepare
+kegg_data <- kegg@result[kegg@result$pvalue < 0.05, ]
+kegg_data <- head(kegg_data[order(kegg_data$pvalue), ], 10)
+
+# Convert GeneRatio to numeric for all
+convert_ratio <- function(x) {
+    sapply(x, function(r) eval(parse(text = r)))
+}
+
+bp_data$GeneRatio_num   <- convert_ratio(bp_data$GeneRatio)
+cc_data$GeneRatio_num   <- convert_ratio(cc_data$GeneRatio)
+mf_data$GeneRatio_num   <- convert_ratio(mf_data$GeneRatio)
+kegg_data$GeneRatio_num <- convert_ratio(kegg_data$GeneRatio)
+
+# =============================================================================
+# Visualization - Manual dotplots
+# =============================================================================
+
+cat("\nGenerating plots...\n")
+
+# GO BP dotplot
+p_BP <- ggplot(bp_data,
+               aes(x = GeneRatio_num,
+                   y = reorder(Description, GeneRatio_num),
+                   size = Count,
+                   color = pvalue)) +
+    geom_point() +
+    scale_color_gradient(low = "red", high = "blue") +
+    labs(title = "GO Biological Process",
+         x = "GeneRatio",
+         y = "") +
+    theme_bw() +
+    theme(axis.text.y = element_text(size = 9))
+
+print(p_BP)
+
+# GO CC dotplot
+p_CC <- ggplot(cc_data,
+               aes(x = GeneRatio_num,
+                   y = reorder(Description, GeneRatio_num),
+                   size = Count,
+                   color = pvalue)) +
+    geom_point() +
+    scale_color_gradient(low = "red", high = "blue") +
+    labs(title = "GO Cellular Component",
+         x = "GeneRatio",
+         y = "") +
+    theme_bw() +
+    theme(axis.text.y = element_text(size = 9))
+
+print(p_CC)
+
+# GO MF dotplot
+p_MF <- ggplot(mf_data,
+               aes(x = GeneRatio_num,
+                   y = reorder(Description, GeneRatio_num),
+                   size = Count,
+                   color = pvalue)) +
+    geom_point() +
+    scale_color_gradient(low = "red", high = "blue") +
+    labs(title = "GO Molecular Function",
+         x = "GeneRatio",
+         y = "") +
+    theme_bw() +
+    theme(axis.text.y = element_text(size = 9))
+
+print(p_MF)
+
+# KEGG dotplot
+p_KEGG <- ggplot(kegg_data,
+                 aes(x = GeneRatio_num,
+                     y = reorder(Description, GeneRatio_num),
+                     size = Count,
+                     color = pvalue)) +
+    geom_point() +
+    scale_color_gradient(low = "red", high = "blue") +
+    labs(title = "KEGG Pathway Enrichment",
+         x = "GeneRatio",
+         y = "") +
+    theme_bw() +
+    theme(axis.text.y = element_text(size = 9))
+
+print(p_KEGG)
+
+# =============================================================================
+# Save Plots
+# =============================================================================
+
+ggsave("GO_BP_dotplot.png",
+       p_BP,   width = 8, height = 6, dpi = 300)
+cat("GO BP plot saved!\n")
+
+ggsave("GO_CC_dotplot.png",
+       p_CC,   width = 8, height = 6, dpi = 300)
+cat("GO CC plot saved!\n")
+
+ggsave("GO_MF_dotplot.png",
+       p_MF,   width = 8, height = 6, dpi = 300)
+cat("GO MF plot saved!\n")
+
+ggsave("KEGG_dotplot.png",
+       p_KEGG, width = 8, height = 7, dpi = 300)
+cat("KEGG plot saved!\n")
+
+# =============================================================================
+# Save Results
+# =============================================================================
+
+# Filtered results
+write.table(bp_data,
+            "GO_BP_results.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+write.table(cc_data,
+            "GO_CC_results.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+write.table(mf_data,
+            "GO_MF_results.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+write.table(kegg_data,
+            "KEGG_results.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+# Complete results
+write.table(go_BP@result,
+            "GO_BP_results_complete.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+write.table(go_CC@result,
+            "GO_CC_results_complete.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+write.table(go_MF@result,
+            "GO_MF_results_complete.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+write.table(kegg@result,
+            "KEGG_results_complete.txt",
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+# =============================================================================
+# Summary
+# =============================================================================
+
+cat("\n", rep("=", 50), "\n", sep = "")
+cat("ENRICHMENT ANALYSIS COMPLETE\n")
+cat(rep("=", 50), "\n", sep = "")
+cat("GO BP terms:", nrow(bp_data), "\n")
+cat("GO CC terms:", nrow(cc_data), "\n")
+cat("GO MF terms:", nrow(mf_data), "\n")
+cat("KEGG pathways:", nrow(kegg_data), "\n")
+cat("\nFiles saved:\n")
+cat("  - GO_BP_results.txt\n")
+cat("  - GO_CC_results.txt\n")
+cat("  - GO_MF_results.txt\n")
+cat("  - KEGG_results.txt\n")
+cat("  - GO_BP_dotplot.png\n")
+cat("  - GO_CC_dotplot.png\n")
+cat("  - GO_MF_dotplot.png\n")
+cat("  - KEGG_dotplot.png\n")
