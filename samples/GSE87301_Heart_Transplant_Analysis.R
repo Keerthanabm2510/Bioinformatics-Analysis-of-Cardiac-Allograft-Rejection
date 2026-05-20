@@ -697,3 +697,89 @@ cat("  - GO_BP_dotplot.png\n")
 cat("  - GO_CC_dotplot.png\n")
 cat("  - GO_MF_dotplot.png\n")
 cat("  - KEGG_dotplot.png\n")
+
+# =============================================================================
+# SECTION 13: PPI Network Analysis
+# =============================================================================
+
+library(STRINGdb)
+library(igraph)
+library(ggplot2)
+
+cat("Building PPI Network...\n")
+
+# =============================================================================
+# Initialize STRING database
+# =============================================================================
+
+# Connect to STRING database (human = 9606)
+string_db <- STRINGdb$new(
+    version    = "11.5",
+    species    = 9606,
+    score_threshold = 400,
+    input_directory = getwd())
+
+cat("STRING database connected!\n")
+
+# =============================================================================
+# Map DEGs to STRING IDs
+# =============================================================================
+
+# Prepare DEG dataframe
+DEG_df <- data.frame(
+    gene = rownames(DEGs_87301),
+    logFC = DEGs_87301$logFC,
+    pvalue = DEGs_87301$P.Value
+)
+
+cat("Total DEGs for PPI:", nrow(DEG_df), "\n")
+
+# Map genes to STRING IDs
+DEG_mapped <- string_db$map(DEG_df,
+                             "gene",
+                             removeUnmappedRows = TRUE)
+
+cat("Genes mapped to STRING:", nrow(DEG_mapped), "\n")
+
+# =============================================================================
+# Get interactions
+# =============================================================================
+
+# Get PPI interactions
+interactions <- string_db$get_interactions(
+    DEG_mapped$STRING_id)
+
+cat("Total interactions:", nrow(interactions), "\n")
+
+# =============================================================================
+# Build igraph network
+# =============================================================================
+
+# Create graph from interactions
+ppi_graph <- graph_from_data_frame(
+    d        = interactions[, c("from","to","combined_score")],
+    directed = FALSE,
+    vertices = DEG_mapped$STRING_id)
+
+# Add gene names as vertex attributes
+V(ppi_graph)$gene_name <- DEG_mapped$gene[
+    match(V(ppi_graph)$name, DEG_mapped$STRING_id)]
+
+# Calculate node degree
+V(ppi_graph)$degree <- degree(ppi_graph)
+
+cat("Network nodes:", vcount(ppi_graph), "\n")
+cat("Network edges:", ecount(ppi_graph), "\n")
+
+# =============================================================================
+# Filter network
+# =============================================================================
+
+# Keep only connected nodes (degree > 0)
+ppi_filtered <- delete_vertices(
+    ppi_graph,
+    V(ppi_graph)[degree(ppi_graph) == 0])
+
+cat("Filtered nodes:", vcount(ppi_filtered), "\n")
+cat("Filtered edges:", ecount(ppi_filtered), "\n")
+
