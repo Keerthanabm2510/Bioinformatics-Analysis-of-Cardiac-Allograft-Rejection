@@ -783,3 +783,78 @@ ppi_filtered <- delete_vertices(
 cat("Filtered nodes:", vcount(ppi_filtered), "\n")
 cat("Filtered edges:", ecount(ppi_filtered), "\n")
 
+# =============================================================================
+# Visualize PPI Network
+# =============================================================================
+
+# Color signature genes differently
+sig_genes <- c("ALAS2", "HBD", "EPB42", "FECH")
+
+# Assign colors
+V(ppi_filtered)$color <- ifelse(
+    V(ppi_filtered)$gene_name %in% sig_genes,
+    "red", "orange")
+
+# Node size based on degree
+V(ppi_filtered)$size <- log1p(V(ppi_filtered)$degree) * 3
+
+# Plot network
+png("PPI_network.png", width=1200, height=1000)
+
+plot(ppi_filtered,
+     vertex.label     = V(ppi_filtered)$gene_name,
+     vertex.label.cex = 0.6,
+     vertex.color     = V(ppi_filtered)$color,
+     vertex.size      = V(ppi_filtered)$size,
+     vertex.label.color = "black",
+     edge.color       = "grey70",
+     edge.width       = 0.5,
+     layout           = layout_with_fr(ppi_filtered),
+     main             = "PPI Network of DEGs")
+
+legend("bottomleft",
+       legend = c("Signature genes", "Other DEGs"),
+       fill   = c("red", "orange"),
+       cex    = 0.8)
+
+dev.off()
+
+cat("PPI network plot saved!\n")
+
+# =============================================================================
+# Get hub genes (high degree nodes)
+# =============================================================================
+
+# Get top hub genes by degree
+hub_genes <- data.frame(
+    gene   = V(ppi_filtered)$gene_name,
+    degree = V(ppi_filtered)$degree
+)
+
+hub_genes <- hub_genes[order(hub_genes$degree,
+                              decreasing = TRUE), ]
+
+cat("\nTop 20 hub genes:\n")
+print(head(hub_genes, 20))
+
+# Check signature genes degree
+cat("\nSignature genes degree:\n")
+print(hub_genes[hub_genes$gene %in% sig_genes, ])
+
+# =============================================================================
+# Save Results
+# =============================================================================
+
+write.table(hub_genes,
+            "PPI_hub_genes.txt",
+            sep="\t", quote=FALSE, row.names=FALSE)
+
+write.table(
+    as.data.frame(interactions),
+    "PPI_interactions.txt",
+    sep="\t", quote=FALSE, row.names=FALSE)
+
+cat("\nPPI results saved!\n")
+cat("  - PPI_network.png\n")
+cat("  - PPI_hub_genes.txt\n")
+cat("  - PPI_interactions.txt\n")
