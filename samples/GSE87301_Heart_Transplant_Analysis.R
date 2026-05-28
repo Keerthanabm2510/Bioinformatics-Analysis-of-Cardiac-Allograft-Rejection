@@ -858,3 +858,77 @@ cat("\nPPI results saved!\n")
 cat("  - PPI_network.png\n")
 cat("  - PPI_hub_genes.txt\n")
 cat("  - PPI_interactions.txt\n")
+
+# =============================================================================
+# Reload all required objects from saved files
+# =============================================================================
+
+setwd("/home/keerthana/Documents/project/1_project/sample/sample_2")
+output_path <- getwd()
+
+# Load libraries
+library(glmnet)
+library(randomForest)
+library(ggplot2)
+
+set.seed(42)
+
+# Step 1: Reload expression matrix
+exprs_final <- as.matrix(read.table(
+    "exprs_final_GSE87301.txt",
+    header = TRUE,
+    sep = "\t",
+    check.names = FALSE))
+
+cat("exprs_final loaded:", dim(exprs_final), "\n")
+
+# Step 2: Reload DEG results
+DEG_results_87301 <- read.table(
+    "DEG_results_GSE87301.txt",
+    header = TRUE,
+    sep = "\t")
+
+# Step 3: Reload filtered DEGs
+DEGs_87301 <- read.table(
+    "DEGs_filtered_GSE87301.txt",
+    header = TRUE,
+    sep = "\t")
+
+cat("DEGs loaded:", nrow(DEGs_87301), "\n")
+
+# Step 4: Reload group info
+group_df <- read.table(
+    "group_info_GSE87301.txt",
+    header = TRUE,
+    sep = "\t")
+
+group <- factor(group_df$group,
+                levels = c("NAR", "AR"))
+
+cat("AR:", sum(group == "AR"), "\n")
+cat("NAR:", sum(group == "NAR"), "\n")
+
+# Step 5: Define variables
+AR_gsm <- c("GSM2327587", "GSM2327591", "GSM2327594",
+             "GSM2327596", "GSM2327600", "GSM2327602",
+             "GSM2327605", "GSM2327608", "GSM2327609",
+             "GSM2327611")
+
+sig_genes <- c("ALAS2", "HBD", "EPB42", "FECH")
+
+# Step 6: Verify everything loaded
+cat("\n--- Verification ---\n")
+cat("exprs_final:", dim(exprs_final), "\n")
+cat("DEGs_87301:", nrow(DEGs_87301), "\n")
+cat("group levels:", levels(group), "\n")
+cat("AR samples:", sum(group == "AR"), "\n")
+cat("NAR samples:", sum(group == "NAR"), "\n")
+
+# Step 7: Check signature genes in exprs_final
+cat("\nSignature genes in exprs_final:\n")
+for (gene in sig_genes) {
+    cat(gene, ":",
+        ifelse(gene %in% rownames(exprs_final),
+               "✓", "✗"), "\n")
+}
+           
