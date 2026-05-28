@@ -931,4 +931,58 @@ for (gene in sig_genes) {
         ifelse(gene %in% rownames(exprs_final),
                "✓", "✗"), "\n")
 }
+
+# Prepare ML matrix
+DEG_genes  <- rownames(DEGs_87301)
+all_genes  <- unique(c(DEG_genes, sig_genes))
+
+exprs_DEGs <- t(exprs_final[
+    rownames(exprs_final) %in% all_genes, ])
+
+cat("\nML matrix:", dim(exprs_DEGs), "\n")
+
+# Binary outcome
+y_binary <- ifelse(group == "AR", 1, 0)
+cat("AR:", sum(y_binary == 1), "\n")
+cat("NAR:", sum(y_binary == 0), "\n")
+
+x <- as.matrix(exprs_DEGs)
+y <- y_binary
+
+# LASSO
+cv_lasso <- cv.glmnet(x, y,
+                      alpha  = 1,
+                      nfolds = 10,
+                      family = "binomial")
+
+lasso_model <- glmnet(x, y,
+                      alpha  = 1,
+                      lambda = cv_lasso$lambda.min,
+                      family = "binomial")
+
+lasso_coef  <- coef(lasso_model)
+lasso_genes <- rownames(lasso_coef)[lasso_coef[,1] != 0]
+lasso_genes <- lasso_genes[lasso_genes != "(Intercept)"]
+
+cat("\nLASSO genes:", length(lasso_genes), "\n")
+
+# Lambda search
+lambdas <- c(cv_lasso$lambda.min,
+             cv_lasso$lambda.1se,
+             0.1, 0.05, 0.01, 0.005, 0.001)
+
+cat("\nLambda search:\n")
+for (lam in lambdas) {
+    model <- glmnet(x, y,
+                    alpha = 1,
+                    lambda = lam,
+                    family = "binomial")
+    coefs <- coef(model)
+    genes <- rownames(coefs)[coefs[,1] != 0]
+    genes <- genes[genes != "(Intercept)"]
+    found <- sum(sig_genes %in% genes)
+    cat("Lambda:", round(lam, 4),
+        "| Genes:", length(genes),
+        "| Sig genes:", found, "\n")
+}
            
