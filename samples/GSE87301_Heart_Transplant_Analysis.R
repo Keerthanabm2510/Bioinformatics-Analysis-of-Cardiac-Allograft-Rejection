@@ -1303,3 +1303,219 @@ print(auc_table)
 cat("\nFiles saved:\n")
 cat("  - ROC_signature_genes_GSE87301.png\n")
 cat("  - ROC_AUC_GSE87301.txt\n")
+
+# =============================================================================
+# Nomogram using glm (no rms needed)
+# =============================================================================
+
+library(rms)
+library(pROC)
+
+# Fit logistic regression
+glm_model <- glm(
+    outcome ~ ALAS2 + HBD + EPB42 + FECH,
+    data   = sig_df,
+    family = binomial(link = "logit"))
+
+cat("\nModel summary:\n")
+summary(glm_model)
+
+# Predicted probabilities
+pred_prob <- predict(glm_model,
+                     type = "response")
+
+# ROC curve
+roc_nom <- roc(sig_df$outcome,
+               pred_prob,
+               ci    = TRUE,
+               quiet = TRUE)
+
+nom_auc <- round(as.numeric(auc(roc_nom)), 3)
+nom_ci  <- round(as.numeric(ci(roc_nom)), 3)
+
+cat("\nNomogram AUC:", nom_auc, "\n")
+cat("95% CI:", nom_ci[1], "-", nom_ci[3], "\n")
+cat("Paper AUC: 0.944\n")
+
+# Plot ROC
+png("ROC_nomogram_GSE87301.png",
+    width=700, height=700)
+
+plot(roc_nom,
+     col  = "blue",
+     lwd  = 2,
+     main = paste0("Nomogram ROC\n",
+                   "AUC = ", nom_auc,
+                   " (95% CI: ",
+                   nom_ci[1], "-",
+                   nom_ci[3], ")"))
+
+dev.off()
+cat("ROC saved!\n")
+
+# Manual nomogram plot using ggplot2
+coefs     <- coef(glm_model)
+intercept <- coefs[1]
+gene_coef <- coefs[-1]
+
+cat("\nGene coefficients:\n")
+print(round(gene_coef, 4))
+
+# Create nomogram data
+nom_df <- data.frame(
+    gene  = names(gene_coef),
+    coef  = as.numeric(gene_coef),
+    range = sapply(names(gene_coef), function(g) {
+        diff(range(sig_df[[g]]))
+    })
+)
+
+nom_df$points <- abs(nom_df$coef) *
+                 nom_df$range * 10
+
+p_nom <- ggplot(nom_df,
+                aes(x = reorder(gene, points),
+                    y = points,
+                    fill = gene)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    labs(title = "Nomogram - Gene Points",
+         x     = "Gene",
+         y     = "Points") +
+    theme_bw() +
+    theme(legend.position = "none",
+          plot.title = element_text(hjust = 0.5))
+
+print(p_nom)
+ggsave("nomogram_GSE87301.png",
+       p_nom, width=8, height=5, dpi=300)
+
+# Calibration plot
+cal_df <- data.frame(
+    predicted = pred_prob,
+    actual    = sig_df$outcome)
+
+cal_df$bin <- cut(cal_df$predicted,
+                  breaks = seq(0, 1, by=0.1),
+                  include.lowest = TRUE)
+
+cal_summary <- aggregate(
+    cbind(actual, predicted) ~ bin,
+    data = cal_df,
+    FUN  = mean)
+
+p_cal <- ggplot(cal_summary,
+                aes(x = predicted,
+                    y = actual)) +
+    geom_point(size=3, color="blue") +
+    geom_line(color="blue") +
+    geom_abline(intercept = 0,
+                slope     = 1,
+                linetype  = "dashed",
+                color     = "red") +
+    labs(title = "Calibration Curve",
+         x     = "Predicted Probability",
+         y     = "Actual Probability") +
+    theme_bw() +
+    theme(plot.title = element_text(hjust=0.5))
+
+print(p_cal)
+ggsave("calibration_curve_GSE87301.png",
+       p_cal, width=7, height=7, dpi=300)
+
+# DCA curve
+thresholds <- seq(0, 1, by=0.01)
+n          <- nrow(sig_df)
+prevalence <- mean(sig_df$outcome)
+
+net_benefit_model <- numeric(length(thresholds))
+net_benefit_all   <- numeric(length(thresholds))
+
+for (i in seq_along(thresholds)) {
+    thresh <- thresholds[i]
+    if (thresh >= 1) next
+
+    pred_pos <- pred_prob >= thresh
+    tp <- sum(pred_pos & sig_df$outcome == 1)
+    fp <- sum(pred_pos & sig_df$outcome == 0)
+
+    net_benefit_model[i] <- (tp/n) -
+        (fp/n) * (thresh/(1-thresh))
+
+    net_benefit_all[i] <- prevalence -
+        (1-prevalence) * (thresh/(1-thresh))
+}
+
+dca_df <- data.frame(
+    threshold = thresholds,
+    Nomogram  = net_benefit_model,
+    All       = pmax(net_benefit_all, 0),
+    None      = 0)
+
+library(reshape2)
+dca_long <- melt(dca_df,
+                 id.vars       = "threshold",
+                 variable.name = "Model",
+                 value.name    = "NetBenefit")
+
+p_dca <- ggplot(dca_long,
+                aes(x     = threshold,
+                    y     = NetBenefit,
+                    color = Model,
+                    linetype = Model)) +
+    geom_line(lwd=1) +
+    scale_color_manual(
+        values = c("Nomogram" = "green",
+                   "All"      = "red",
+                   "None"     = "black")) +
+    ylim(-0.1, 0.5) +
+    labs(title = "Decision Curve Analysis",
+         x     = "Risk Threshold",
+         y     = "Net Benefit") +
+    theme_bw() +
+    theme(plot.title = element_text(hjust=0.5))
+
+print(p_dca)
+ggsave("DCA_curve_GSE87301.png",
+       p_dca, width=8, height=6, dpi=300)
+
+# =============================================================================
+# Save results
+# =============================================================================
+
+pred_df <- data.frame(
+    sample    = rownames(sig_df),
+    group     = ifelse(sig_df$outcome==1,"AR","NAR"),
+    pred_prob = pred_prob)
+
+write.table(pred_df,
+            "nomogram_predictions_GSE87301.txt",
+            sep="\t", quote=FALSE, row.names=FALSE)
+
+nom_results <- data.frame(
+    Model    = "Nomogram",
+    AUC      = nom_auc,
+    CI_lower = nom_ci[1],
+    CI_upper = nom_ci[3])
+
+write.table(nom_results,
+            "nomogram_AUC_GSE87301.txt",
+            sep="\t", quote=FALSE, row.names=FALSE)
+
+# =============================================================================
+# Summary
+# =============================================================================
+
+cat("\n", rep("=", 50), "\n", sep="")
+cat("NOMOGRAM ANALYSIS COMPLETE\n")
+cat(rep("=", 50), "\n", sep="")
+cat("AUC:", nom_auc, "\n")
+cat("95% CI:", nom_ci[1], "-", nom_ci[3], "\n")
+cat("Paper AUC: 0.944\n")
+cat("\nFiles saved:\n")
+cat("  - nomogram_GSE87301.png\n")
+cat("  - ROC_nomogram_GSE87301.png\n")
+cat("  - calibration_curve_GSE87301.png\n")
+cat("  - DCA_curve_GSE87301.png\n")
+cat("  - nomogram_predictions_GSE87301.txt\n")
+cat("  - nomogram_AUC_GSE87301.txt\n")           
