@@ -1519,3 +1519,412 @@ cat("  - calibration_curve_GSE87301.png\n")
 cat("  - DCA_curve_GSE87301.png\n")
 cat("  - nomogram_predictions_GSE87301.txt\n")
 cat("  - nomogram_AUC_GSE87301.txt\n")           
+
+# =============================================================================
+# SECTION 17: Immune Cell Infiltration (ssGSEA)
+# =============================================================================
+
+library(GSVA)
+library(GSEABase)
+library(ggplot2)
+library(pheatmap)
+library(reshape2)
+
+setwd("/home/keerthana/Documents/project/1_project/sample/sample_2")
+output_path <- getwd()
+
+# =============================================================================
+# Reload required objects
+# =============================================================================
+
+exprs_final <- as.matrix(read.table(
+    "exprs_final_GSE87301.txt",
+    header      = TRUE,
+    sep         = "\t",
+    check.names = FALSE))
+
+group_df <- read.table(
+    "group_info_GSE87301.txt",
+    header = TRUE,
+    sep    = "\t")
+
+group <- factor(group_df$group,
+                levels = c("NAR", "AR"))
+
+signature_genes <- c("ALAS2", "HBD", "EPB42", "FECH")
+
+cat("Data reloaded!\n")
+cat("exprs_final:", dim(exprs_final), "\n")
+cat("AR:", sum(group=="AR"), "\n")
+cat("NAR:", sum(group=="NAR"), "\n")
+
+# =============================================================================
+# Define 27 immune cell gene sets
+# =============================================================================
+
+immune_gene_sets <- list(
+    Activated_B_cell = c(
+        "CD19","MS4A1","CD27","CD38","IGHG1"),
+    Activated_CD4_T_cell = c(
+        "CD4","IL2RA","ICOS","CD69","IFNG"),
+    Activated_CD8_T_cell = c(
+        "CD8A","CD8B","GZMA","GZMB","PRF1"),
+    Activated_dendritic_cell = c(
+        "CD86","CD80","HLA-DRA","CCR7","LAMP3"),
+    CD56bright_NK_cell = c(
+        "NCAM1","XCL1","XCL2","GZMK","KLRC1"),
+    CD56dim_NK_cell = c(
+        "FCGR3A","KIR2DL1","KIR3DL1","NKG7","GNLY"),
+    Central_memory_CD4_T_cell = c(
+        "CCR7","CD4","CD27","CD28","SELL"),
+    Central_memory_CD8_T_cell = c(
+        "CCR7","CD8A","CD27","CD28","SELL"),
+    Effector_memory_CD4_T_cell = c(
+        "CD4","CD44","IFNG","TNF","CCR5"),
+    Effector_memory_CD8_T_cell = c(
+        "CD8A","CD44","GZMA","GZMB","IFNG"),
+    Eosinophil = c(
+        "CCR3","SIGLEC8","IL5RA","EPX","PRG2"),
+    Gamma_delta_T_cell = c(
+        "TRDC","TRGC1","TRGC2","KLRB1","NKG7"),
+    Immature_B_cell = c(
+        "CD19","VPREB1","VPREB3","IGLL1","RAG1"),
+    Immature_dendritic_cell = c(
+        "ITGAX","HLA-DRA","CD1C","CLEC10A","FLT3"),
+    MDSC = c(
+        "S100A8","S100A9","CD33","ARG1","CYBB"),
+    Macrophage = c(
+        "CD68","CD163","MRC1","MARCO","CSF1R"),
+    Mast_cell = c(
+        "KIT","MS4A2","FCER1A","CPA3","TPSAB1"),
+    Memory_B_cell = c(
+        "CD27","CD19","CD38","IGHM","IGHG1"),
+    Monocyte = c(
+        "CD14","FCGR3A","CSF1R","CCR2","CX3CR1"),
+    Natural_killer_T_cell = c(
+        "CD3D","NKG7","KLRB1","GZMA","NCR1"),
+    Natural_killer_cell = c(
+        "NCR1","NKG7","KLRD1","GNLY","PRF1"),
+    Neutrophil = c(
+        "FCGR3B","S100A8","S100A9","MPO","CXCR1"),
+    Plasmacytoid_dendritic_cell = c(
+        "CLEC4C","IL3RA","LILRA4","TCF4","SMPD3"),
+    Regulatory_T_cell = c(
+        "FOXP3","IL2RA","CTLA4","IKZF2","TNFRSF18"),
+    T_follicular_helper_cell = c(
+        "CXCR5","ICOS","BCL6","IL21","PDCD1"),
+    Type_1_T_helper_cell = c(
+        "TBX21","IFNG","CXCR3","IL12RB2","STAT4"),
+    Type_17_T_helper_cell = c(
+        "RORC","IL17A","IL17F","CCR6","IL23R")
+)
+
+cat("Immune cell types:", length(immune_gene_sets), "\n")
+
+# =============================================================================
+# Run ssGSEA
+# =============================================================================
+
+cat("\nRunning ssGSEA...\n")
+
+gene_sets <- lapply(
+    names(immune_gene_sets),
+    function(name) {
+        genes <- immune_gene_sets[[name]]
+        genes <- genes[genes %in%
+                       rownames(exprs_final)]
+        GeneSet(genes, setName=name)
+    })
+
+gene_set_collection <- GeneSetCollection(gene_sets)
+
+ssgsea_param <- ssgseaParam(
+    exprData = exprs_final,
+    geneSets = gene_set_collection)
+
+ssgsea_scores <- gsva(ssgsea_param,
+                      verbose = TRUE)
+
+cat("ssGSEA complete!\n")
+cat("Dimensions:", dim(ssgsea_scores), "\n")
+
+# =============================================================================
+# Compare AR vs NAR
+# =============================================================================
+
+cat("\nComparing immune infiltration...\n")
+
+ar_idx  <- which(group == "AR")
+nar_idx <- which(group == "NAR")
+
+immune_results <- data.frame(
+    cell_type = rownames(ssgsea_scores),
+    p_value   = NA,
+    AR_mean   = NA,
+    NAR_mean  = NA,
+    direction = NA,
+    stringsAsFactors = FALSE)
+
+for (i in seq_len(nrow(ssgsea_scores))) {
+    ar_scores  <- as.numeric(
+        ssgsea_scores[i, ar_idx])
+    nar_scores <- as.numeric(
+        ssgsea_scores[i, nar_idx])
+
+    test <- wilcox.test(ar_scores,
+                        nar_scores,
+                        exact = FALSE)
+
+    immune_results$p_value[i]   <- test$p.value
+    immune_results$AR_mean[i]   <- mean(ar_scores)
+    immune_results$NAR_mean[i]  <- mean(nar_scores)
+    immune_results$direction[i] <- ifelse(
+        mean(ar_scores) > mean(nar_scores),
+        "Higher in AR", "Lower in AR")
+}
+
+immune_results <- immune_results[
+    order(immune_results$p_value), ]
+
+cat("\nAll immune results:\n")
+print(immune_results[, c("cell_type",
+                          "p_value",
+                          "direction")])
+
+sig_immune <- immune_results[
+    immune_results$p_value < 0.05, ]
+
+cat("\nSignificant (p<0.05):",
+    nrow(sig_immune), "\n")
+print(sig_immune[, c("cell_type",
+                      "p_value",
+                      "direction")])
+
+# =============================================================================
+# Heatmap of all immune cells
+# =============================================================================
+
+annotation_col <- data.frame(
+    Group     = group,
+    row.names = colnames(ssgsea_scores))
+
+png("ssGSEA_heatmap.png",
+    width=1000, height=900)
+
+pheatmap(ssgsea_scores,
+         main              = "Immune Infiltration - GSE87301",
+         annotation_col    = annotation_col,
+         annotation_colors = list(
+             Group = c(AR="red", NAR="blue")),
+         show_colnames     = FALSE,
+         fontsize_row      = 8,
+         color             = colorRampPalette(
+             c("blue","white","red"))(100))
+
+dev.off()
+cat("Heatmap saved!\n")
+
+# =============================================================================
+# Boxplot of significant immune cells
+# =============================================================================
+
+if (nrow(sig_immune) > 0) {
+
+    sig_cells  <- sig_immune$cell_type
+    scores_sub <- ssgsea_scores[
+        sig_cells, , drop=FALSE]
+
+    # Convert to long format manually
+    scores_long <- data.frame(
+        cell_type = rep(sig_cells,
+                        ncol(scores_sub)),
+        sample    = rep(colnames(scores_sub),
+                        each=length(sig_cells)),
+        score     = as.vector(scores_sub),
+        stringsAsFactors = FALSE)
+
+    # Match group by sample name
+    scores_long$group <- group[
+        match(scores_long$sample,
+              colnames(ssgsea_scores))]
+
+    p_box <- ggplot(scores_long,
+                    aes(x    = cell_type,
+                        y    = score,
+                        fill = group)) +
+        geom_boxplot() +
+        scale_fill_manual(
+            values = c("AR"="red",
+                       "NAR"="blue")) +
+        labs(title = "Significant Immune Cells",
+             x     = "Immune Cell Type",
+             y     = "ssGSEA Score") +
+        theme_bw() +
+        theme(
+            axis.text.x  = element_text(
+                angle=45, hjust=1),
+            plot.title   = element_text(
+                hjust=0.5))
+
+    print(p_box)
+    ggsave("immune_boxplot.png",
+           p_box,
+           width=10, height=6, dpi=300)
+    cat("Boxplot saved!\n")
+
+} else {
+    cat("No significant immune cells found\n")
+}
+
+# =============================================================================
+# Correlation: Signature genes vs immune cells
+# =============================================================================
+
+cat("\nCalculating correlations...\n")
+
+cor_results <- list()
+
+for (gene in signature_genes) {
+
+    gene_expr <- as.numeric(exprs_final[gene, ])
+
+    cor_df <- data.frame(
+        cell_type   = rownames(ssgsea_scores),
+        correlation = NA,
+        p_value     = NA,
+        stringsAsFactors = FALSE)
+
+    for (i in seq_len(nrow(ssgsea_scores))) {
+        cell_scores <- as.numeric(
+            ssgsea_scores[i, ])
+
+        cor_test <- cor.test(
+            gene_expr,
+            cell_scores,
+            method = "spearman")
+
+        cor_df$correlation[i] <- cor_test$estimate
+        cor_df$p_value[i]     <- cor_test$p.value
+    }
+
+    cor_df <- cor_df[
+        order(cor_df$correlation,
+              decreasing=TRUE), ]
+
+    cor_results[[gene]] <- cor_df
+
+    cat("\n", gene, "top 5 correlations:\n")
+    print(head(cor_df[, c("cell_type",
+                           "correlation",
+                           "p_value")], 5))
+}
+
+# =============================================================================
+# Correlation heatmap
+# =============================================================================
+
+cor_matrix <- matrix(
+    NA,
+    nrow = nrow(ssgsea_scores),
+    ncol = length(signature_genes))
+
+rownames(cor_matrix) <- rownames(ssgsea_scores)
+colnames(cor_matrix) <- signature_genes
+
+for (gene in signature_genes) {
+    cor_matrix[, gene] <- cor_results[[gene]]$correlation[
+        match(rownames(ssgsea_scores),
+              cor_results[[gene]]$cell_type)]
+}
+
+png("signature_immune_correlation.png",
+    width=800, height=700)
+
+pheatmap(cor_matrix,
+         main         = "Signature Genes vs Immune Cells",
+         color        = colorRampPalette(
+             c("blue","white","red"))(100),
+         fontsize_row = 8,
+         fontsize_col = 10,
+         cluster_cols = FALSE)
+
+dev.off()
+cat("Correlation heatmap saved!\n")
+
+# =============================================================================
+# Save all results
+# =============================================================================
+
+write.table(
+    as.data.frame(ssgsea_scores),
+    "ssGSEA_scores.txt",
+    sep="\t", quote=FALSE, row.names=TRUE)
+
+write.table(
+    immune_results,
+    "immune_comparison.txt",
+    sep="\t", quote=FALSE, row.names=FALSE)
+
+write.table(
+    sig_immune,
+    "significant_immune_cells.txt",
+    sep="\t", quote=FALSE, row.names=FALSE)
+
+for (gene in signature_genes) {
+    write.table(
+        cor_results[[gene]],
+        paste0(gene, "_immune_correlation.txt"),
+        sep="\t", quote=FALSE, row.names=FALSE)
+}
+
+# =============================================================================
+# Summary
+# =============================================================================
+
+cat("\n", rep("=", 50), "\n", sep="")
+cat("ssGSEA IMMUNE INFILTRATION COMPLETE\n")
+cat(rep("=", 50), "\n", sep="")
+cat("Immune cell types analyzed:",
+    nrow(ssgsea_scores), "\n")
+cat("Significant cells (p<0.05):",
+    nrow(sig_immune), "\n")
+
+if (nrow(sig_immune) > 0) {
+    cat("\nSignificant immune cells:\n")
+    print(sig_immune[, c("cell_type",
+                          "p_value",
+                          "direction")])
+}
+
+cat("\nExpected from paper:\n")
+cat("Lower in AR: Central_memory_CD4_T_cell,")
+cat(" Effector_memory_CD4_T_cell,")
+cat(" Eosinophil, Immature_dendritic_cell,")
+cat(" Type_1_T_helper_cell\n")
+cat("Higher in AR: Type_17_T_helper_cell\n")
+
+cat("\nFiles saved:\n")
+cat("  - ssGSEA_heatmap.png\n")
+cat("  - immune_boxplot.png\n")
+cat("  - signature_immune_correlation.png\n")
+cat("  - ssGSEA_scores.txt\n")
+cat("  - immune_comparison.txt\n")
+cat("  - significant_immune_cells.txt\n")
+for (gene in signature_genes) {
+    cat("  -", paste0(gene,
+        "_immune_correlation.txt\n"))
+}
+
+cat("\n", rep("=", 50), "\n", sep="")
+cat("COMPLETE ANALYSIS DONE!\n")
+cat(rep("=", 50), "\n", sep="")
+cat("All steps completed:\n")
+cat("✅ Preprocessing\n")
+cat("✅ QC\n")
+cat("✅ DEG Analysis\n")
+cat("✅ Enrichment Analysis\n")
+cat("✅ PPI Network\n")
+cat("✅ LASSO + Random Forest\n")
+cat("✅ ROC Curves\n")
+cat("✅ Nomogram\n")
+cat("✅ ssGSEA Immune Infiltration\n")
